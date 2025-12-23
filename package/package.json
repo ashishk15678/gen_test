@@ -1,0 +1,25 @@
+{
+    "name": "rabbit-bot",
+    "version": "1.0.0",
+    "private": true,
+    "description": "A CodeRabbit-like GitHub App",
+    "author": "Antigravity",
+    "license": "ISC",
+    "scripts": {
+        "start": "probot run ./lib/index.js",
+        "build": "tsc",
+        "dev": "nodemon --exec \"npm start\""
+    },
+    "dependencies": {
+        "probot": "^13.0.0"
+    },
+    "devDependencies": {
+        "nodemon": "^3.0.0",
+        "ts-node": "^10.9.1",
+        "typescript": "^5.0.0",
+        "@types/node": "^20.0.0"
+    },
+    "engines": {
+        "node": ">= 18.0.0"
+    }
+}
