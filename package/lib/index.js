@@ -1,4 +1,5 @@
 "use strict";
+require("dotenv/config");
 const pull_request_handler_1 = require("./handlers/pull-request.handler");
 module.exports = (app) => {
     app.log.info("Rabbit Bot app loaded!");

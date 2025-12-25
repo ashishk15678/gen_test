@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { Probot } from "probot";
 import { PullRequestHandler } from "./handlers/pull-request.handler";
 

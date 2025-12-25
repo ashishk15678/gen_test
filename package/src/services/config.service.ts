@@ -7,7 +7,7 @@ export interface BotConfig {
 }
 
 const DEFAULT_CONFIG: BotConfig = {
-  aiModel: "gpt-4",
+  aiModel: "gemini-3.5-flash",
   enableReviews: true,
   enableChat: true,
 };
