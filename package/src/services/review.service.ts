@@ -1,14 +1,17 @@
-import { Context } from "probot";
+import { Octokit } from "octokit";
 import { AIService } from "./ai.service";
 
 export class ReviewService {
-  static async review(context: Context<"pull_request">): Promise<string> {
-    const pr = context.payload.pull_request;
-
-    const { data: diff } = await context.octokit.pulls.get({
-      owner: context.repo().owner,
-      repo: context.repo().repo,
-      pull_number: pr.number,
+  static async review(
+    octokit: Octokit,
+    owner: string,
+    repo: string,
+    pull_number: number
+  ): Promise<string> {
+    const { data: diff } = await octokit.rest.pulls.get({
+      owner,
+      repo,
+      pull_number,
       mediaType: {
         format: "diff",
       },

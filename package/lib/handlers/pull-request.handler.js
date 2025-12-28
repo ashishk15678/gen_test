@@ -3,22 +3,27 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.PullRequestHandler = void 0;
 const review_service_1 = require("../services/review.service");
 class PullRequestHandler {
-    static async handle(context) {
-        const pr = context.payload.pull_request;
-        context.log.info(`Received PR event for ${pr.html_url}`);
+    static async handle(octokit, payload) {
+        const pr = payload.pull_request;
+        console.log(`Received PR event for ${pr.html_url}`);
         if (pr.state !== "open") {
             return;
         }
         try {
-            const review = await review_service_1.ReviewService.review(context);
-            const prComment = context.issue({
+            const owner = payload.repository.owner.login;
+            const repo = payload.repository.name;
+            const pull_number = pr.number;
+            const review = await review_service_1.ReviewService.review(octokit, owner, repo, pull_number);
+            await octokit.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: pull_number,
                 body: review,
             });
-            await context.octokit.issues.createComment(prComment);
-            context.log.info("Posted review comment");
+            console.log("Posted review comment");
         }
         catch (error) {
-            context.log.error(error, "Failed to review PR");
+            console.error("Failed to review PR", error);
         }
     }
 }

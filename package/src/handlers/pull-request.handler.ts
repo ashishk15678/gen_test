@@ -1,26 +1,31 @@
-import { Context } from "probot";
+import { Octokit } from "octokit";
 import { ReviewService } from "../services/review.service";
 
 export class PullRequestHandler {
-  async handle(context: Context<"pull_request">) {
-    const pr = context.payload.pull_request;
-    context.log.info(`Received PR event for ${pr.html_url}`);
+  static async handle(octokit: Octokit, payload: any) {
+    const pr = payload.pull_request;
+    console.log(`Received PR event for ${pr.html_url}`);
 
     if (pr.state !== "open") {
       return;
     }
 
     try {
-      const review = await ReviewService.review(context);
+      const owner = payload.repository.owner.login;
+      const repo = payload.repository.name;
+      const pull_number = pr.number;
 
-      const prComment = context.issue({
+      const review = await ReviewService.review(octokit, owner, repo, pull_number);
+
+      await octokit.rest.issues.createComment({
+        owner,
+        repo,
+        issue_number: pull_number,
         body: review,
       });
-
-      await context.octokit.issues.createComment(prComment);
-      context.log.info("Posted review comment");
+      console.log("Posted review comment");
     } catch (error) {
-      context.log.error(error, "Failed to review PR");
+      console.error("Failed to review PR", error);
     }
   }
 }
