@@ -2,7 +2,6 @@ import { generateText } from "ai";
 import { google } from "@ai-sdk/google";
 import {
   REVIEW_SYSTEM_PROMPT,
-  // generateReviewPrompt
 } from "../prompts";
 
 export class AIService {
@@ -17,7 +16,8 @@ export class AIService {
       const result = await generateText({
         model: google("gemini-1.5-flash"),
         system: REVIEW_SYSTEM_PROMPT,
-        prompt: (await this.reviewPR(diff)).toString(),
+        prompt: diff,
+        
       });
 
       return result.text;
