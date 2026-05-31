@@ -11,6 +11,10 @@ export const auth = betterAuth({
 		google: {
 			clientId: env.GOOGLE_CLIENT_ID || '',
 			clientSecret: env.GOOGLE_CLIENT_SECRET || ''
+		},
+		github: {
+			clientId: env.GITHUB_CLIENT_ID || '',
+			clientSecret: env.GITHUB_CLIENT_SECRET || ''
 		}
 	},
 	emailAndPassword: {
@@ -19,6 +23,12 @@ export const auth = betterAuth({
 			console.log('Reset password url:', url);
 		}
 	},
+	trustedOrigins: [
+		'https://evolving-martin-monthly.ngrok-free.app',
+		'https://rabbit.ashishkr.com',
+		'http://localhost:5173',
+		'http://127.0.0.1:5173'
+	],
 	emailVerification: {
 		sendOnSignUp: true
 	},
