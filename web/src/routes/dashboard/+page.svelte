@@ -1,7 +1,12 @@
 <script lang="ts">
 	import Navbar from '$lib/components/Navbar.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
-	import { FolderGit, GitPullRequest, Award, ShieldCheck, Plus, ExternalLink, X, ToggleLeft, ToggleRight, Info, HelpCircle } from '@lucide/svelte';
+	import { 
+		FolderGit, GitPullRequest, Award, ShieldCheck, Plus, 
+		ExternalLink, X, ToggleLeft, ToggleRight, Info, HelpCircle,
+		SlidersHorizontal, Grid, List, Search, GitBranch, GitMerge,
+		Activity, Sparkles, ChevronRight, CheckCircle2, AlertCircle, Globe
+	} from '@lucide/svelte';
 	import { enhance } from '$app/forms';
 	import { toast } from 'svelte-sonner';
 
@@ -12,11 +17,11 @@
 	let newRepoName = '';
 	let newRepoUrl = '';
 	let isSubmitting = false;
+	let searchQuery = '';
 
 	// Keep local copy of repositories for Optimistic UI updates
 	let localRepos = data.repositories || [];
 	$: {
-		// Sync with server data once it finishes refreshing in the background
 		localRepos = data.repositories || [];
 	}
 
@@ -47,6 +52,27 @@
 		return count > 0 ? Math.round(total / count) : 100;
 	})();
 
+	// Extract recent pull requests for the Previews log (sorted by date)
+	$: recentReviews = (() => {
+		let prs: any[] = [];
+		for (const r of localRepos) {
+			for (const pr of r.pullRequests || []) {
+				prs.push({
+					...pr,
+					repoId: r.id,
+					repoName: r.name
+				});
+			}
+		}
+		// Sort by createdAt descending (newest first)
+		return prs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 4);
+	})();
+
+	// Filter repositories by search query
+	$: filteredRepos = localRepos.filter(r => 
+		r.name.toLowerCase().includes(searchQuery.toLowerCase())
+	);
+
 	// Optimistic UI for adding a repository
 	function handleAddSubmit() {
 		isSubmitting = true;
@@ -60,7 +86,7 @@
 			url: tempUrl,
 			isActive: true,
 			pullRequests: [],
-			isOptimistic: true // marker for yellow glow
+			isOptimistic: true
 		};
 
 		// Optimistically add to the front
@@ -94,7 +120,6 @@
 
 	// Optimistic UI for toggling repo status
 	function handleToggleSubmit(repoId: string, currentActive: boolean) {
-		// 1. Instantly toggle status locally and mark as toggling (yellow border)
 		localRepos = localRepos.map(r => {
 			if (r.id === repoId) {
 				return { ...r, isActive: !currentActive, isToggling: true };
@@ -104,7 +129,6 @@
 
 		return async ({ result, update }) => {
 			if (result.type === 'success') {
-				// 2. Mark update as successful, trigger success flash class
 				justUpdatedId = repoId;
 				setTimeout(() => {
 					justUpdatedId = '';
@@ -113,7 +137,7 @@
 				toast.success(`Repository ${!currentActive ? 'activated' : 'deactivated'} successfully!`);
 				await update();
 			} else {
-				// 3. Revert to original state on failure
+				// Revert on failure
 				localRepos = localRepos.map(r => {
 					if (r.id === repoId) {
 						return { ...r, isActive: currentActive, isToggling: false };
@@ -148,207 +172,318 @@
 <Navbar active="dashboard" />
 <Sidebar active="dashboard" />
 
-<main class="md:pl-64 pt-24 min-h-screen bg-background text-foreground">
-	<div class="max-w-5xl mx-auto px-6 py-8">
-		<!-- Header -->
-		<header class="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-8">
-			<div>
-				<h1 class="text-3xl font-extrabold tracking-tight mb-1 text-white">Dashboard</h1>
-				<p class="text-muted-foreground text-sm font-mono">Manage automated code reviews.</p>
+<main class="md:pl-60 pt-20 min-h-screen bg-black text-zinc-300 font-sans selection:bg-primary selection:text-black">
+	<div class="max-w-7xl mx-auto px-6 py-8 space-y-6">
+		
+		<!-- Search & Filter Controls Row -->
+		<div class="flex items-center justify-between gap-4 pb-2">
+			<!-- Search Bar -->
+			<div class="relative flex-1 max-w-xl">
+				<Search class="absolute left-3.5 top-3 w-4 h-4 text-zinc-500" />
+				<input 
+					type="text" 
+					placeholder="Search Repositories..." 
+					bind:value={searchQuery}
+					class="w-full bg-zinc-950/80 border border-zinc-900 rounded-md py-2 pl-10 pr-4 text-xs font-mono outline-none text-white focus:border-zinc-700 transition-colors placeholder-zinc-500"
+				/>
 			</div>
-			<button 
-				onclick={() => showAddModal = true} 
-				class="px-4 py-2.5 bg-primary text-primary-foreground font-mono text-xs font-bold rounded flex items-center justify-center gap-2 hover:shadow-[0_0_15px_rgba(0,255,102,0.3)] transition-all cursor-pointer"
-			>
-				<Plus class="w-4 h-4" />
-				CONNECT REPO
-			</button>
-		</header>
 
-		<!-- Account-Wide Enable Option -->
-		<div class="bg-card border border-border/40 hover:border-primary/20 rounded p-6 mb-8 flex items-center justify-between transition-all duration-300">
-			<div>
-				<h3 class="font-bold text-white text-base mb-1">Account-Wide Code Reviews</h3>
-				<p class="text-muted-foreground text-xs font-mono">Automatically review pull requests for ALL repositories in your GitHub account.</p>
-			</div>
-			<form action="?/toggleAccountAutoReview" method="POST" use:enhance={() => handleAccountToggle(data.user?.autoReviewAll)}>
-				<input type="hidden" name="autoReviewAll" value={(!isAccountAutoReview).toString()} />
-				<button type="submit" class="text-muted-foreground hover:text-white transition-colors cursor-pointer flex items-center">
-					{#if isAccountAutoReview}
-						<ToggleRight class="w-9 h-9 text-primary" />
-					{:else}
-						<ToggleLeft class="w-9 h-9 text-muted-foreground/40" />
-					{/if}
+			<!-- Quick controls -->
+			<div class="flex items-center gap-2">
+				<button disabled class="p-2 border border-zinc-900 bg-zinc-950/30 rounded text-zinc-600 hover:text-zinc-400 cursor-not-allowed">
+					<SlidersHorizontal class="w-4 h-4" />
 				</button>
-			</form>
-		</div>
+				<button disabled class="p-2 border border-zinc-900 bg-zinc-950/30 rounded text-zinc-400 hover:text-zinc-200 cursor-not-allowed">
+					<Grid class="w-4 h-4" />
+				</button>
+				<button disabled class="p-2 border border-zinc-900 bg-zinc-950/30 rounded text-zinc-600 hover:text-zinc-400 cursor-not-allowed">
+					<List class="w-4 h-4" />
+				</button>
 
-		<!-- Stats Cards -->
-		<div class="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-10">
-			<div class="bg-card border border-border/40 rounded p-6 flex items-center justify-between hover:border-primary/20 transition-all duration-300">
-				<div>
-					<span class="text-xs font-mono text-muted-foreground block mb-1">CONNECTED REPOS</span>
-					<span class="text-3xl font-extrabold text-white">{totalRepos}</span>
-				</div>
-				<div class="w-10 h-10 rounded bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
-					<FolderGit class="w-5 h-5" />
-				</div>
-			</div>
-
-			<div class="bg-card border border-border/40 rounded p-6 flex items-center justify-between hover:border-primary/20 transition-all duration-300">
-				<div>
-					<span class="text-xs font-mono text-muted-foreground block mb-1">ACTIVE PR REVIEWS</span>
-					<span class="text-3xl font-extrabold text-white">{activePRs}</span>
-				</div>
-				<div class="w-10 h-10 rounded bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
-					<GitPullRequest class="w-5 h-5" />
-				</div>
-			</div>
-
-			<div class="bg-card border border-border/40 rounded p-6 flex items-center justify-between hover:border-primary/20 transition-all duration-300">
-				<div>
-					<span class="text-xs font-mono text-muted-foreground block mb-1">AVG QUALITY SCORE</span>
-					<span class="text-3xl font-extrabold text-white">{avgScore}%</span>
-				</div>
-				<div class="w-10 h-10 rounded bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
-					<Award class="w-5 h-5" />
-				</div>
+				<!-- Vercel-Style Add Project Button (White background, black text) -->
+				<button 
+					onclick={() => showAddModal = true} 
+					class="px-4 py-2 bg-white text-black font-semibold text-xs rounded hover:bg-zinc-200 transition-all flex items-center justify-center gap-1.5 cursor-pointer ml-2 shadow-[0_0_12px_rgba(255,255,255,0.1)]"
+				>
+					<Plus class="w-3.5 h-3.5 stroke-[3]" />
+					Connect Repo
+				</button>
 			</div>
 		</div>
 
-		<!-- Repo List Title -->
-		<h2 class="text-sm font-mono text-muted-foreground tracking-wider mb-4 uppercase">Connected Repositories</h2>
+		<!-- 2-Column Content Layout (Left Sidebar Info Columns [3/10], Right Repos Columns [7/10]) -->
+		<div class="grid grid-cols-1 lg:grid-cols-10 gap-8 items-start">
+			
+			<!-- Column Left (Usage, Automation, Recent Previews) -->
+			<div class="lg:col-span-3 space-y-6">
+				
+				<!-- Usage Widget -->
+				<div class="bg-zinc-950/20 border border-zinc-900 rounded-lg p-5 space-y-4">
+					<div class="flex justify-between items-center border-b border-zinc-900/60 pb-3">
+						<span class="text-xs font-bold text-white tracking-wider uppercase font-mono">Usage</span>
+						<span class="px-2 py-0.5 bg-zinc-900 border border-zinc-800 text-[10px] font-mono text-zinc-400 rounded">
+							Last 30 Days
+						</span>
+					</div>
 
-		<!-- Repositories Grid -->
-		{#if localRepos.length === 0}
-			<div class="bg-card/40 border border-border/30 rounded p-12 text-center flex flex-col items-center justify-center mb-10">
-				<ShieldCheck class="w-12 h-12 text-muted-foreground mb-4" />
-				<h3 class="font-bold text-lg text-white mb-1">No repositories connected</h3>
-				<p class="text-muted-foreground text-sm max-w-sm mb-6">Connect your GitHub repositories manually to allow Rabbit to automatically review pull requests.</p>
-				<button onclick={() => showAddModal = true} class="px-4 py-2 bg-primary text-primary-foreground font-mono text-xs font-semibold rounded">
-					Connect First Repo
-				</button>
-			</div>
-		{:else}
-			<div class="grid gap-4 mb-10">
-				{#each localRepos as repo}
-					<!-- Glow classes mapping:
-						1. isOptimistic: Yellow pulsing border indicating processing
-						2. isToggling: Yellow border indicating status toggle in progress
-						3. success-glow: Flash bright green on success
-					-->
-					<div 
-						class="bg-card border rounded p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-500 group
-						{repo.id === justUpdatedId ? 'success-glow border-primary' : ''}
-						{repo.isOptimistic ? 'border-yellow-500/80 bg-yellow-500/5 shadow-[0_0_15px_rgba(234,179,8,0.2)] animate-pulse' : ''}
-						{repo.isToggling ? 'border-yellow-500/50' : ''}
-						{!repo.isOptimistic && repo.id !== justUpdatedId && !repo.isToggling ? 'border-border/40 hover:border-primary/20' : ''}"
-					>
-						<div class="flex-1">
-							<div class="flex items-center gap-2 mb-1.5">
-								{#if repo.isOptimistic}
-									<span class="text-lg font-bold text-white/50 font-sans">{repo.name}</span>
-								{:else}
-									<a href="/dashboard/repo/{repo.id}" class="text-lg font-bold text-white group-hover:text-primary transition-colors flex items-center gap-1.5">
-										{repo.name}
-									</a>
-								{/if}
-								<a href={repo.url} target="_blank" rel="noreferrer" class="text-muted-foreground hover:text-white transition-colors">
-									<ExternalLink class="w-3.5 h-3.5" />
-								</a>
-							</div>
-							<div class="flex items-center gap-4 text-xs font-mono text-muted-foreground">
-								<span>{(repo.pullRequests || []).length} PRs total</span>
-								<span>•</span>
-								<span class="flex items-center gap-1">
-									<span class="w-2 h-2 rounded-full {repo.isActive ? 'bg-primary animate-pulse' : 'bg-muted-foreground/30'}"></span>
-									{repo.isActive ? 'Active' : 'Inactive'}
-								</span>
-							</div>
+					<div class="space-y-3.5 text-xs font-mono">
+						<div class="flex items-center justify-between">
+							<span class="text-zinc-500 flex items-center gap-2">
+								<span class="w-1.5 h-1.5 rounded-full bg-primary/70"></span>
+								Connected Repos
+							</span>
+							<span class="text-white font-bold">{totalRepos}</span>
 						</div>
-
-						<div class="flex items-center gap-8 justify-between sm:justify-end">
-							<div class="flex flex-col text-right">
-								<span class="text-[10px] font-mono text-muted-foreground">REVIEWS SCORE</span>
-								<span class="font-mono font-bold text-white text-sm">
-									{repo.pullRequests && repo.pullRequests.some(pr => pr.reviews && pr.reviews.length > 0) 
-										? Math.round(repo.pullRequests.reduce((acc, p) => acc + (p.reviews?.[0]?.score || 0), 0) / repo.pullRequests.filter(p => p.reviews && p.reviews.length > 0).length) 
-										: 100}%
-								</span>
-							</div>
-
-							<!-- Activate Switch -->
-							{#if repo.isOptimistic}
-								<div class="flex items-center">
-									<ToggleRight class="w-9 h-9 text-muted-foreground/20 animate-pulse" />
-								</div>
-							{:else}
-								<form action="?/toggleRepo" method="POST" use:enhance={() => handleToggleSubmit(repo.id, repo.isActive)}>
-									<input type="hidden" name="id" value={repo.id} />
-									<input type="hidden" name="isActive" value={(!repo.isActive).toString()} />
-									<button type="submit" class="text-muted-foreground hover:text-white transition-colors cursor-pointer flex items-center">
-										{#if repo.isActive}
-											<ToggleRight class="w-9 h-9 text-primary" />
-										{:else}
-											<ToggleLeft class="w-9 h-9 text-muted-foreground/40" />
-										{/if}
-									</button>
-								</form>
-							{/if}
+						<div class="flex items-center justify-between">
+							<span class="text-zinc-500 flex items-center gap-2">
+								<span class="w-1.5 h-1.5 rounded-full bg-primary/70"></span>
+								Active PR Reviews
+							</span>
+							<span class="text-white font-bold">{activePRs}</span>
+						</div>
+						<div class="flex items-center justify-between">
+							<span class="text-zinc-500 flex items-center gap-2">
+								<span class="w-1.5 h-1.5 rounded-full bg-primary/70"></span>
+								Avg Review Score
+							</span>
+							<span class="text-primary font-bold">{avgScore}%</span>
+						</div>
+						<div class="flex items-center justify-between">
+							<span class="text-zinc-500 flex items-center gap-2">
+								<span class="w-1.5 h-1.5 rounded-full bg-primary/70"></span>
+								AI Review Runs
+							</span>
+							<span class="text-zinc-400">Unlimited / Free</span>
 						</div>
 					</div>
-				{/each}
-			</div>
-		{/if}
+				</div>
 
-		<!-- GitHub App Setup Manual (Accordion Style UX) -->
-		<div class="bg-card border border-border/40 rounded p-6">
-			<h3 class="text-sm font-mono text-white tracking-wider mb-4 uppercase flex items-center gap-2">
-				<Info class="w-4 h-4 text-primary" />
-				GitHub App Integration Setup
-			</h3>
-			<div class="text-sm font-sans space-y-4 text-zinc-300 leading-relaxed">
-				<p>To let Rabbit automatically review PRs in your GitHub repositories like CodeRabbit, you can register a GitHub App. Follow these steps:</p>
-				
-				<ol class="list-decimal pl-5 space-y-2 text-xs font-mono text-zinc-400">
-					<li>Go to <strong>GitHub Developer Settings</strong> &gt; <strong>GitHub Apps</strong> &gt; <strong>New GitHub App</strong>.</li>
-					<li>Set the homepage URL to your deployed URL, and check the <strong>Webhook Active</strong> box.</li>
-					<li>Set the Webhook URL to: <code class="text-primary bg-primary/5 px-1 py-0.5 rounded">https://YOUR-DOMAIN/api/webhook</code>.</li>
-					<li>Set permissions: <strong>Pull requests: Read & Write</strong>, and <strong>Metadata: Read-only</strong>.</li>
-					<li>Subscribe to events: check the box for <strong>Pull request</strong>.</li>
-					<li>Save, click <strong>Generate a private key</strong> to download the key, and locate your <strong>App ID</strong>.</li>
-					<li>Configure your env files:
-						<pre class="bg-background border border-border/50 p-2 rounded text-[11px] text-primary/80 mt-1">
-GITHUB_APP_ID="YOUR_APP_ID"
-GITHUB_APP_PRIVATE_KEY="YOUR_PRIVATE_KEY"
-GEMINI_API_KEY="YOUR_GOOGLE_GEMINI_API_KEY"</pre>
-					</li>
-					<li>Install the GitHub App onto your repositories! Webhook reviews will trigger immediately on open/push events.</li>
-				</ol>
+				<!-- Automation / Alerts Widget (Vercel styled) -->
+				<div class="bg-zinc-950/20 border border-zinc-900 rounded-lg p-5 space-y-4">
+					<div>
+						<h4 class="text-xs font-bold text-white font-mono tracking-wider uppercase mb-1">Automation Rules</h4>
+						<p class="text-zinc-500 text-[11px] leading-normal font-mono">Toggle reviewing for all pull requests automatically.</p>
+					</div>
+
+					<div class="bg-zinc-950 border border-zinc-900 rounded p-4 flex items-center justify-between">
+						<div class="space-y-0.5">
+							<span class="text-xs font-semibold text-white block">Auto Review All</span>
+							<span class="text-[9px] font-mono text-zinc-500 block">Runs triggers instantly</span>
+						</div>
+
+						<form action="?/toggleAccountAutoReview" method="POST" use:enhance={() => handleAccountToggle(data.user?.autoReviewAll)}>
+							<input type="hidden" name="autoReviewAll" value={(!isAccountAutoReview).toString()} />
+							<button type="submit" class="text-zinc-400 hover:text-white transition-colors cursor-pointer flex items-center">
+								{#if isAccountAutoReview}
+									<ToggleRight class="w-8 h-8 text-primary" />
+								{:else}
+									<ToggleLeft class="w-8 h-8 text-zinc-700" />
+								{/if}
+							</button>
+						</form>
+					</div>
+				</div>
+
+				<!-- Recent Reviews Log (Vercel style Previews logs) -->
+				<div class="space-y-3">
+					<h3 class="text-xs font-bold font-mono text-zinc-500 tracking-wider uppercase">Recent Reviews</h3>
+
+					{#if recentReviews.length === 0}
+						<div class="bg-zinc-950/20 border border-zinc-900 rounded-lg p-5 text-center text-xs font-mono text-zinc-500">
+							No pull requests scanned yet.
+						</div>
+					{:else}
+						<div class="space-y-3">
+							{#each recentReviews as pr}
+								<a 
+									href="/dashboard/repo/{pr.repoId}/pr/{pr.number}"
+									class="bg-zinc-950/30 border border-zinc-900 hover:border-zinc-800 rounded-lg p-4 block space-y-2.5 transition-colors group"
+								>
+									<div class="flex items-start justify-between gap-3">
+										<div class="truncate">
+											<span class="text-white font-medium text-xs block group-hover:text-primary transition-colors leading-snug truncate">
+												{pr.title}
+											</span>
+											<span class="text-[10px] font-mono text-zinc-500 truncate block mt-0.5">{pr.repoName}</span>
+										</div>
+
+										<span class="px-2 py-0.5 bg-primary/10 text-primary border border-primary/20 text-[9px] font-mono font-bold uppercase rounded">
+											{pr.reviews?.[0]?.score || 100}%
+										</span>
+									</div>
+
+									<div class="flex items-center justify-between text-[9px] font-mono text-zinc-500 pt-1 border-t border-zinc-900/60">
+										<span class="flex items-center gap-1">
+											<GitBranch class="w-3 h-3 text-zinc-600" />
+											{pr.branch}
+										</span>
+										<span>PR #{pr.number}</span>
+									</div>
+								</a>
+							{/each}
+						</div>
+					{/if}
+				</div>
 			</div>
+
+			<!-- Column Right (Projects list) -->
+			<div class="lg:col-span-7 space-y-4">
+				
+				<div class="flex items-center justify-between border-b border-zinc-900 pb-2">
+					<h2 class="text-xs font-bold font-mono text-zinc-500 tracking-wider uppercase">Projects</h2>
+					<span class="text-xs font-mono text-zinc-600">{filteredRepos.length} Connected</span>
+				</div>
+
+				<!-- Connected Repos Grid -->
+				{#if filteredRepos.length === 0}
+					<div class="bg-zinc-950/20 border border-zinc-900 rounded-lg p-16 text-center flex flex-col items-center justify-center space-y-4">
+						<div class="w-12 h-12 rounded-full bg-zinc-900/50 border border-zinc-800 flex items-center justify-center text-zinc-600">
+							<ShieldCheck class="w-6 h-6" />
+						</div>
+						<div class="space-y-1">
+							<h3 class="font-bold text-white text-base">No active repositories</h3>
+							<p class="text-zinc-500 text-xs font-mono max-w-sm mx-auto leading-normal">
+								Connect a GitHub repository to trigger AI analysis and logical security code reviews.
+							</p>
+						</div>
+						<button 
+							onclick={() => showAddModal = true} 
+							class="px-4 py-2 bg-white text-black font-semibold text-xs rounded hover:bg-zinc-200 transition-colors cursor-pointer"
+						>
+							Connect First Repo
+						</button>
+					</div>
+				{:else}
+					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+						{#each filteredRepos as repo}
+							<!-- Project Card (Vercel Style) -->
+							<div 
+								class="bg-zinc-950/20 border rounded-lg p-4 flex flex-col justify-between h-[175px] transition-all duration-300 group
+								{repo.id === justUpdatedId ? 'border-primary shadow-[0_0_15px_rgba(0,255,102,0.1)]' : 'border-zinc-900 hover:border-zinc-800'}
+								{repo.isOptimistic ? 'border-yellow-500/50 bg-yellow-500/5 animate-pulse' : ''}
+								{repo.isToggling ? 'border-yellow-500/30' : ''}"
+							>
+								<!-- Top row: Avatar, Name, Status, Switch -->
+								<div class="flex items-start justify-between gap-3">
+									<div class="flex items-center gap-3">
+										<div class="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-white font-mono text-xs group-hover:border-zinc-700 transition-colors">
+											<FolderGit class="w-4 h-4 text-zinc-500 group-hover:text-primary transition-colors {repo.isActive ? 'text-primary' : ''}" />
+										</div>
+
+										<div class="truncate max-w-[170px]">
+											{#if repo.isOptimistic}
+												<span class="text-white/60 font-semibold text-sm block truncate">{repo.name}</span>
+											{:else}
+												<a 
+													href="/dashboard/repo/{repo.id}" 
+													class="text-white font-semibold text-sm block group-hover:text-primary transition-colors truncate"
+												>
+													{repo.name}
+												</a>
+											{/if}
+											<a 
+												href={repo.url} 
+												target="_blank" 
+												rel="noreferrer" 
+												class="text-zinc-600 hover:text-zinc-400 text-[10px] font-mono flex items-center gap-1 mt-0.5 transition-colors"
+											>
+												{repo.name.split('/')[1]}.rabbit.app
+												<ExternalLink class="w-2.5 h-2.5" />
+											</a>
+										</div>
+									</div>
+
+									<!-- Top Right: Active Status badge / switch -->
+									<div class="flex items-center gap-1 text-zinc-600">
+										{#if repo.isOptimistic}
+											<ToggleRight class="w-7 h-7 text-zinc-800 animate-pulse" />
+										{:else}
+											<form action="?/toggleRepo" method="POST" use:enhance={() => handleToggleSubmit(repo.id, repo.isActive)}>
+												<input type="hidden" name="id" value={repo.id} />
+												<input type="hidden" name="isActive" value={(!repo.isActive).toString()} />
+												<button type="submit" class="hover:text-white transition-colors cursor-pointer flex items-center p-0.5">
+													{#if repo.isActive}
+														<span class="w-2 h-2 rounded-full bg-primary animate-pulse mr-2"></span>
+														<ToggleRight class="w-7 h-7 text-primary" />
+													{:else}
+														<span class="w-2 h-2 rounded-full bg-zinc-800 mr-2"></span>
+														<ToggleLeft class="w-7 h-7 text-zinc-850" />
+													{/if}
+												</button>
+											</form>
+										{/if}
+									</div>
+								</div>
+
+								<!-- Middle Section: Git identifier -->
+								<div class="text-xs text-zinc-400 font-mono flex items-center gap-1.5 mt-2 truncate">
+									<Globe class="w-3.5 h-3.5 text-zinc-600 shrink-0" />
+									<span class="truncate">{repo.name}</span>
+								</div>
+
+								<!-- Bottom Section: Score, PR info & date -->
+								<div class="pt-3 border-t border-zinc-900/60 flex justify-between items-center mt-3 text-[10px] font-mono text-zinc-500">
+									<div class="flex items-center gap-1 text-white">
+										<GitPullRequest class="w-3 h-3 text-zinc-500" />
+										<span>{(repo.pullRequests || []).length} PRs</span>
+									</div>
+
+									<div class="flex items-center gap-3">
+										<div class="flex flex-col text-right">
+											<span class="text-[8px] text-zinc-600 font-bold uppercase leading-none">Review Score</span>
+											<span class="font-bold text-white mt-0.5 text-xs">
+												{repo.pullRequests && repo.pullRequests.some(pr => pr.reviews && pr.reviews.length > 0) 
+													? Math.round(repo.pullRequests.reduce((acc, p) => acc + (p.reviews?.[0]?.score || 0), 0) / repo.pullRequests.filter(p => p.reviews && p.reviews.length > 0).length) 
+													: 100}%
+											</span>
+										</div>
+									</div>
+								</div>
+							</div>
+						{/each}
+					</div>
+				{/if}
+
+				<!-- GitHub Setup Accordion Block -->
+				<div class="bg-zinc-950/20 border border-zinc-900 rounded-lg p-5 space-y-4">
+					<h3 class="text-xs font-bold font-mono text-white tracking-wider uppercase flex items-center gap-2">
+						<Info class="w-4 h-4 text-primary" />
+						Integration Instructions
+					</h3>
+					<div class="text-xs font-mono text-zinc-500 space-y-2.5 leading-relaxed">
+						<p>Secure automated code reviews run inside webhooks. Follow steps to connect your GitHub account App:</p>
+						<ol class="list-decimal pl-4 space-y-1.5 text-zinc-500 text-[11px]">
+							<li>Generate a GitHub App key, subscribe to event type: <strong>Pull request</strong>.</li>
+							<li>Add webhook tunnel target: <code class="text-primary bg-primary/5 px-1 py-0.5 rounded">https://evolving-martin-monthly.ngrok-free.app/api/webhook</code>.</li>
+							<li>Configure settings credentials in <a href="/dashboard/settings" class="text-primary underline hover:text-white transition-colors">Settings Pane</a>.</li>
+						</ol>
+					</div>
+				</div>
+			</div>
+
 		</div>
 	</div>
 </main>
 
-<!-- Add Repository Modal -->
+<!-- Add Repository Modal (Vercel Style) -->
 {#if showAddModal}
-	<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-		<div class="bg-card border border-border/40 rounded p-6 max-w-md w-full relative animate-slide-up">
+	<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm">
+		<div class="bg-zinc-950 border border-zinc-900 rounded-lg p-6 max-w-md w-full relative animate-slide-up">
 			<button 
 				onclick={() => showAddModal = false} 
-				class="absolute right-4 top-4 text-muted-foreground hover:text-white transition-colors"
+				class="absolute right-4 top-4 text-zinc-500 hover:text-white transition-colors cursor-pointer"
 			>
-				<X class="w-5 h-5" />
+				<X class="w-4 h-4" />
 			</button>
 
-			<h3 class="text-xl font-bold text-white mb-2">Connect Repository</h3>
-			<p class="text-muted-foreground text-xs font-mono mb-6 leading-relaxed">
-				Integrate your repository with Rabbit. Provide your repo details in the format <code class="text-primary">owner/repo</code>.
+			<h3 class="text-lg font-bold text-white mb-1.5">Connect Repository</h3>
+			<p class="text-zinc-500 text-xs font-mono mb-5 leading-normal">
+				Connect a GitHub repository manually. Specify in <code class="text-primary">owner/repo</code> syntax format.
 			</p>
 
 			<form action="?/addRepo" method="POST" use:enhance={handleAddSubmit} class="space-y-4">
-				<div>
-					<label for="name" class="block text-xs font-mono text-muted-foreground mb-1.5 uppercase">REPOSITORY NAME</label>
+				<div class="space-y-1.5">
+					<label for="name" class="block text-[10px] font-mono text-zinc-500 uppercase">REPOSITORY NAME</label>
 					<input 
 						type="text" 
 						id="name" 
@@ -356,38 +491,38 @@ GEMINI_API_KEY="YOUR_GOOGLE_GEMINI_API_KEY"</pre>
 						placeholder="e.g. sveltejs/svelte" 
 						bind:value={newRepoName}
 						required 
-						class="w-full bg-background border border-border/50 focus:border-primary/60 outline-none rounded p-2.5 font-mono text-sm text-white placeholder-muted-foreground/50 transition-colors"
+						class="w-full bg-black border border-zinc-900 focus:border-zinc-700 outline-none rounded p-2.5 font-mono text-xs text-white placeholder-zinc-700 transition-colors"
 					/>
 				</div>
-				<div>
-					<label for="url" class="block text-xs font-mono text-muted-foreground mb-1.5 uppercase">GITHUB URL (OPTIONAL)</label>
+				<div class="space-y-1.5">
+					<label for="url" class="block text-[10px] font-mono text-zinc-500 uppercase">GITHUB URL (OPTIONAL)</label>
 					<input 
 						type="url" 
 						id="url" 
 						name="url" 
 						placeholder="e.g. https://github.com/sveltejs/svelte" 
 						bind:value={newRepoUrl}
-						class="w-full bg-background border border-border/50 focus:border-primary/60 outline-none rounded p-2.5 font-mono text-sm text-white placeholder-muted-foreground/50 transition-colors"
+						class="w-full bg-black border border-zinc-900 focus:border-zinc-700 outline-none rounded p-2.5 font-mono text-xs text-white placeholder-zinc-700 transition-colors"
 					/>
 				</div>
 
-				<div class="flex gap-3 justify-end pt-4">
+				<div class="flex gap-2 justify-end pt-3 text-xs">
 					<button 
 						type="button" 
 						onclick={() => showAddModal = false} 
-						class="px-4 py-2 border border-border text-muted-foreground hover:text-white rounded font-mono text-xs cursor-pointer"
+						class="px-4 py-2 border border-zinc-900 text-zinc-400 hover:text-white rounded font-mono font-semibold transition-colors cursor-pointer"
 					>
-						CANCEL
+						Cancel
 					</button>
 					<button 
 						type="submit" 
 						disabled={isSubmitting}
-						class="px-4 py-2 bg-primary text-primary-foreground font-mono text-xs font-bold rounded flex items-center gap-2 hover:shadow-[0_0_10px_rgba(0,255,102,0.2)] disabled:opacity-50 cursor-pointer"
+						class="px-4 py-2 bg-white text-black font-semibold rounded hover:bg-zinc-200 transition-colors disabled:opacity-50 cursor-pointer"
 					>
 						{#if isSubmitting}
-							CONNECTING...
+							Connecting...
 						{:else}
-							CONNECT
+							Connect
 						{/if}
 					</button>
 				</div>
@@ -409,22 +544,5 @@ GEMINI_API_KEY="YOUR_GOOGLE_GEMINI_API_KEY"</pre>
 	}
 	.animate-slide-up {
 		animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-	}
-
-	/* Success flash animations */
-	@keyframes successGlow {
-		0% {
-			box-shadow: 0 0 25px rgba(0, 255, 102, 0.6);
-			border-color: #00ff66;
-			background-color: rgba(0, 255, 102, 0.1);
-		}
-		100% {
-			box-shadow: 0 0 0px rgba(0, 255, 102, 0);
-			border-color: rgba(0, 255, 102, 0.1);
-			background-color: transparent;
-		}
-	}
-	.success-glow {
-		animation: successGlow 2s ease-out forwards;
 	}
 </style>
