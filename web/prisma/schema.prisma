@@ -18,6 +18,15 @@ model User {
   email         String    @unique
   name          String?
   posts         Post[]
+  repositories  Repository[]
+  autoReviewAll Boolean   @default(false)
+  geminiApiKey  String?
+  openaiApiKey  String?
+  groqApiKey    String?
+  customPrompt  String?
+  aiModel       String    @default("gemini-flash")
+  reviewTone    String    @default("constructive")
+  pathFilters   String    @default("**/*.ts, **/*.js, **/*.py, **/*.go")
   emailVerified Boolean   @default(false)
   image         String?
   createdAt     DateTime  @default(now())
@@ -83,4 +92,79 @@ model Verification {
 
   @@index([identifier])
   @@map("verification")
+}
+
+model Repository {
+  id            String        @id @default(cuid())
+  name          String        // e.g. "google/jax" or "ashishk15678/rabbit"
+  url           String
+  isActive      Boolean       @default(true)
+  webhookSecret String        @default(uuid())
+  userId        String
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pullRequests  PullRequest[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([userId])
+  @@map("repository")
+}
+
+model PullRequest {
+  id            String            @id @default(cuid())
+  number        Int
+  title         String
+  branch        String            @default("main")
+  status        String            @default("open") // open, merged, closed
+  repositoryId  String
+  repository    Repository        @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  reviews       Review[]
+  chatMessages  ChatInteraction[]
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@unique([repositoryId, number])
+  @@index([repositoryId])
+  @@map("pull_request")
+}
+
+model Review {
+  id            String          @id @default(cuid())
+  pullRequestId String
+  pullRequest   PullRequest     @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
+  summary       String
+  score         Int             @default(100)
+  status        String          @default("completed") // pending, completed, failed
+  comments      ReviewComment[]
+  createdAt     DateTime        @default(now())
+
+  @@index([pullRequestId])
+  @@map("review")
+}
+
+model ReviewComment {
+  id            String   @id @default(cuid())
+  reviewId      String
+  review        Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  filePath      String
+  lineNumber    Int
+  content       String
+  diffHunk      String
+  type          String   @default("issue") // issue, suggestion, praise
+  createdAt     DateTime @default(now())
+
+  @@index([reviewId])
+  @@map("review_comment")
+}
+
+model ChatInteraction {
+  id            String      @id @default(cuid())
+  pullRequestId String
+  pullRequest   PullRequest @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
+  sender        String      // user, ai
+  message       String
+  createdAt     DateTime    @default(now())
+
+  @@index([pullRequestId])
+  @@map("chat_interaction")
 }
